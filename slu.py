@@ -11,14 +11,10 @@ import utils.gpt_slu_util as gs
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-# --- 新增 ---: 导入 OpenAI 库用于本地接口调用
 try:
     from openai import OpenAI
 except ImportError:
-    # 如果用户不使用本地模式，这个库不是必需的
     OpenAI = None 
-
-# 使用 tqdm 显示进度条
 try:
     from tqdm import tqdm
 except ImportError:
@@ -27,57 +23,39 @@ except ImportError:
               "Install it with: pip install tqdm")
         return iterable
 
-# --- 日志配置 ---
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
 def setup_arg_parser() -> argparse.ArgumentParser:
-    """设置命令行参数解析器"""
-    parser = argparse.ArgumentParser(description="使用 LLM API 进行统一的语音语言理解 (SLU)")
+    parser = argparse.ArgumentParser(description="SLU inference script with local API support")
     parser.add_argument(
-        "--input-file", type=str, required=True, help="输入的JSONL元数据文件路径"
+        "--input-file", type=str, required=True, help="Input JSONL file path."
     )
     parser.add_argument(
-        "--audio-dir", type=str,  help="存放音频文件 (.wav) 的目录路径"
+        "--audio-dir", type=str,  help="Audio directory path."
     )
     parser.add_argument(
-        "--output-file", type=str, required=True, help="输出的JSONL文件路径"
+        "--output-file", type=str, required=True, help="Output JSONL file path."
     )
-    
-    # --- 修改 ---: 增加'local'选项，并更新help说明
-    parser.add_argument(
-        "--provider",
-        type=str,
-        default="google",
-        choices=["google", "azure", "local"],
-        help="API提供商: 'google'/'azure' (通过Dashscope), 或 'local' (本地OpenAI兼容接口)"
-    )
-    # --- 新增 ---: 为本地部署模型增加 --api-base 参数
     parser.add_argument(
         "--api-base",
         type=str,
         default="http://0.0.0.0:12355/v1",
-        help="本地LLM服务的API基地址 (仅当 --provider='local' 时使用)"
-    )
-    parser.add_argument(
-        "--api-key",
-        type=str,
-        default=None,
-        help="LLM服务的API key。本地服务通常不需要，云服务则必需。"
+        help="Endpoint URL of vLLM"
     )
     parser.add_argument(
         "--model-name",
         type=str,
         default="gemini-2.5-flash",
-        help="要使用的模型名称 (例如: 'gemini-2.5-flash', 或本地部署的模型名)"
+        help="The model name served by vLLM (e.g. Qwen3-4B)"
     )
     parser.add_argument(
-        "--temperature", type=float, default=0.0, help="生成文本的温度。"
+        "--temperature", type=float, default=0.0, help="Teperature for model generation."
     )
     parser.add_argument(
-        "--max-tokens", type=int, default=512, help="模型生成的最大token数量。"
+        "--max-tokens", type=int, default=512, help="Maximum tokens for model generation."
     )
 
     # few-shot
@@ -85,7 +63,7 @@ def setup_arg_parser() -> argparse.ArgumentParser:
         "--n-shot", 
         type=int,
         default=0,
-        help="在提示中使用的少量示例数量。"
+        help="Shot name"
     )
 
     # text dataset train_split
@@ -93,7 +71,7 @@ def setup_arg_parser() -> argparse.ArgumentParser:
         "--train-input-file",
         type=str,
         default=None,
-        help="可选的训练集JSONL文件路径，用于few-shot示例选择。"
+        help="Few-shot use train split text dataset, from which few-shot examples will be randomly selected. Required if n-shot > 0."
     )
 
     # audio dataset train_split
@@ -101,7 +79,7 @@ def setup_arg_parser() -> argparse.ArgumentParser:
         "--train-audio-dir",
         type=str,
         default=None,
-        help="可选的训练集音频目录路径，用于few-shot示例选择。"
+        help="Few-shot use train split audio dataset, from which few-shot examples will be randomly selected. Required if n-shot > 0."
     )
 
     parser.add_argument(
@@ -109,21 +87,20 @@ def setup_arg_parser() -> argparse.ArgumentParser:
         type=str,
         default="vanilla",
         choices=["vanilla", "croprompt(id2sf)", "croprompt(sf2id)", "gpt-slu"],
-        help="选择使用的提示模板类型。"
+        help="Prompt schema to use"
     )
     return parser
 
 def encode_audio_to_base64(audio_path: Path) -> Optional[str]:
-    """读取音频文件，进行Base64编码，并返回字符串。"""
     try:
         with open(audio_path, "rb") as audio_file:
             binary_data = audio_file.read()
             return base64.b64encode(binary_data).decode('utf-8')
     except FileNotFoundError:
-        logging.error(f"音频文件未找到: {audio_path}")
+        logging.error(f"Cannot find audio file: {audio_path}")
         return None
     except Exception as e:
-        logging.error(f"编码音频文件时出错 {audio_path}: {e}", exc_info=True)
+        logging.error(f"Error on encoding audio {audio_path} to base64: {e}")
         return None
 
 
@@ -132,20 +109,16 @@ def extract_json_string(text: Any) -> str:
     if not isinstance(text, str):
         return "[]"
 
-    # 1. 移除 <think> 標籤及其內容
     text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
-    
-    # 2. 移除 Markdown 程式碼塊語法 (```json ... ```)
+
     text = re.sub(r'```(?:json)?\s*|```', '', text).strip()
-    
-    # 3. 尋找 JSON 列表的邊界 [ ... ]
+
     start = text.find('[')
     end = text.rfind(']')
     
     if start != -1 and end != -1:
         return text[start:end+1]
     
-    # 4. 如果沒找到 [ ]，但內容看起來像空結果，回傳標準空列表字串
     return "[]"
 
 # Raw semantics -> Standard semantics
@@ -154,14 +127,9 @@ def transform_semantics_to_standard(
     with_intent: bool=True,
     with_slot: bool=True,
 ) -> List[Dict[str, Any]]:
-    """
-    將原始訓練集的 semantics 格式轉換為系統提示詞要求的標準格式。
-    """
     standard_list = []
     
-    # 遍歷 意图1, 意图2...
     for intent_key, domains in raw_semantics.items():
-        # 遍歷 領域 (如 音乐, 地图)
         for domain_name, slots_list in domains.items():
             if with_intent and with_slot:
                 new_frame = {
@@ -175,19 +143,16 @@ def transform_semantics_to_standard(
                     "intent": "",
                 }
             
-            # 提取 intent 欄位並重組 slots
             actual_slots = {}
             for item in slots_list:
                 if item.get("name") == "intent":
                     if with_intent:
                         new_frame["intent"] = item.get("value", "")
                 else:
-                    # 將 {"name": "歌手名", "value": "周杰倫"} 轉為 "歌手名": "周杰倫"
                     if with_slot:
                         if with_intent:
                             actual_slots[item["name"]] = item["value"]
                         else:
-                            # 如果不包含 intent，則 slots 的 key 需要加上 domain 前綴
                             prefixed_key = f"{domain_name}-{item['name']}"
                             actual_slots[prefixed_key] = item["value"]
             
@@ -201,8 +166,7 @@ def transform_semantics_to_standard(
             
     return standard_list
 
-# --- 新增 ---: 专门用于调用本地 OpenAI 兼容接口的函数
-def call_local_api(
+def call_api(
     api_base: str,
     model_name: str,
     audio_path: Path,
@@ -346,7 +310,7 @@ def call_local_api(
     # 3) Current query
     if audio_path == "":
         if text_query == "":
-            logging.error("Error: 本地API调用时，必须提供音频路径或文本查询。")
+            logging.error("Error: Both audio_path and text_query are empty. At least one must be provided.")
             return None
         messages.append({
             "role": "user",
@@ -372,7 +336,7 @@ def call_local_api(
             ],
         })
 
-    # 4) Call local API
+    # 4) Call API
     try:
         response = client.chat.completions.create(
             model=model_name,
@@ -384,7 +348,7 @@ def call_local_api(
         text = response.choices[0].message.content.strip()
         return extract_json_string(text)
     except Exception as e:
-        logging.error(f"调用本地 API 时发生错误 (audio: {audio_path.name if audio_path != '' else 'text query'}): {e}", exc_info=True)
+        logging.error(f"Error: API call failed for audio {audio_path} with error: {e}", exc_info=True)
         return None   
 
 def process_file(args: argparse.Namespace):
@@ -408,18 +372,18 @@ def process_file(args: argparse.Namespace):
     shot_list = []
     if(args.n_shot > 0):
         """
-        shot list 結構:
+        shot list strcture:
         {
             "audio_path": Path,
             "query": str,
             "semantics": List[Dict[str, Any]]
         }
         """
-        logging.info(f"使用 {args.n_shot}-shot，正在建構 shot list...")
+        logging.info(f"Using {args.n_shot}-shot，building shot list...")
 
         ## Checking train text file
         if(args.train_input_file is None):
-            logging.error("Error: 使用 few-shot 时，必须提供 --train-file 参数。")
+            logging.error("Error: n-shot > 0 but no train input file provided.")
             return
         train_input_file = Path(args.train_input_file)
 
@@ -454,7 +418,7 @@ def process_file(args: argparse.Namespace):
             if (train_audio_dir != ""):
                 audio_path = train_audio_dir / f"id_{item_id}.wav"
                 if not audio_path.exists():
-                    logging.warning(f"跳过 few-shot 示例，找不到音频文件: {audio_path}")
+                    logging.warning(f"Cannot find the audio for shot example: {audio_path}, this example will be skipped in few-shot.")
                     continue
             else:
                 audio_path = ""
@@ -491,7 +455,7 @@ def process_file(args: argparse.Namespace):
                 ## ====== Call local api ======
                 prompt_mode = args.prompt_mode
                 if prompt_mode == "vanilla":
-                    model_output_str = call_local_api(
+                    model_output_str = call_api(
                         api_base=args.api_base,
                         model_name=args.model_name,
                         text_query=ground_truth_query,
@@ -502,7 +466,7 @@ def process_file(args: argparse.Namespace):
                     )
                 elif prompt_mode == "croprompt(id2sf)":
                     # Stage 1: ID
-                    stage1_output = call_local_api(
+                    stage1_output = call_api(
                         api_base=args.api_base,
                         model_name=args.model_name,
                         text_query=ground_truth_query,
@@ -514,11 +478,11 @@ def process_file(args: argparse.Namespace):
                         shot_list=shot_list
                     )
                     if stage1_output is None:
-                        logging.error(f"Stage 1 调用失败。ID: {item_id}")
+                        logging.error(f"Stage 1 fail。ID: {item_id}")
                         continue
 
                     # Stage 2: SF
-                    model_output_str = call_local_api(
+                    model_output_str = call_api(
                         api_base=args.api_base,
                         model_name=args.model_name,
                         text_query=ground_truth_query,
@@ -532,7 +496,7 @@ def process_file(args: argparse.Namespace):
                     )
                 elif prompt_mode == "croprompt(sf2id)":
                     # Stage 1: SF
-                    stage1_output = call_local_api(
+                    stage1_output = call_api(
                         api_base=args.api_base,
                         model_name=args.model_name,
                         text_query=ground_truth_query,
@@ -544,11 +508,11 @@ def process_file(args: argparse.Namespace):
                         shot_list=shot_list
                     )
                     if stage1_output is None:
-                        logging.error(f"Stage 1 调用失败。ID: {item_id}")
+                        logging.error(f"Stage 1 fail。ID: {item_id}")
                         continue
 
                     # Stage 2: ID
-                    model_output_str = call_local_api(
+                    model_output_str = call_api(
                         api_base=args.api_base,
                         model_name=args.model_name,
                         text_query=ground_truth_query,
@@ -563,7 +527,7 @@ def process_file(args: argparse.Namespace):
                 elif prompt_mode == "gpt-slu":
                     # ==== GPT-SLU stage ====
                     # stage 1: ID1
-                    id1 = call_local_api(
+                    id1 = call_api(
                         api_base=args.api_base,
                         model_name=args.model_name,
                         text_query=ground_truth_query,
@@ -575,11 +539,11 @@ def process_file(args: argparse.Namespace):
                         shot_list=shot_list
                     )
                     if id1 is None:
-                        logging.error(f"ID1 调用失败。ID: {item_id}")
+                        logging.error(f"ID1 fail。ID: {item_id}")
                         continue
 
                     # stage 2: SF1
-                    sf1 = call_local_api(
+                    sf1 = call_api(
                         api_base=args.api_base,
                         model_name=args.model_name,
                         text_query=ground_truth_query,
@@ -592,11 +556,11 @@ def process_file(args: argparse.Namespace):
                         shot_list=shot_list
                     )
                     if sf1 is None:
-                        logging.error(f"SF1 调用失败。ID: {item_id}")
+                        logging.error(f"SF1 fail。ID: {item_id}")
                         continue
 
                     # stage 3: ID2
-                    id2 = call_local_api(
+                    id2 = call_api(
                         api_base=args.api_base,
                         model_name=args.model_name,
                         text_query=ground_truth_query,
@@ -609,11 +573,11 @@ def process_file(args: argparse.Namespace):
                         shot_list=shot_list
                     )
                     if id2 is None:
-                        logging.error(f"ID2 调用失败。ID: {item_id}")
+                        logging.error(f"ID2 fail。ID: {item_id}")
                         continue
 
                     # stage 4: SF2
-                    sf2 = call_local_api(
+                    sf2 = call_api(
                         api_base=args.api_base,
                         model_name=args.model_name,
                         text_query=ground_truth_query,
@@ -626,13 +590,12 @@ def process_file(args: argparse.Namespace):
                         shot_list=shot_list
                     )
                     if sf2 is None:
-                        logging.error(f"SF2 调用失败。ID: {item_id}")
+                        logging.error(f"SF2 fail. ID: {item_id}")
                         continue
 
                     logging.debug(f"ID2 Output: {id2}")
                     logging.debug(f"SF2 Output: {sf2}")
                     
-                    # ID2 和 SF2 的输出都需要解析，最终合并成一个语义列表
                     parsed_id2: List[Dict[str, Any]] = []
                     parsed_sf2: List[Dict[str, Any]] = []
 
@@ -641,22 +604,20 @@ def process_file(args: argparse.Namespace):
                             id2 = id2.strip("```json\n").strip("`")
                         parsed_id2 = json.loads(id2)
                     except json.JSONDecodeError as e:
-                        logging.warning(f"\n无法解码 ID2 的 JSON。ID: {item_id}, Error: {e}, Output: {id2}")
+                        logging.warning(f"\nCannot decode ID2 JSON. ID: {item_id}, Error: {e}, Output: {id2}")
                     
                     try:
                         if sf2.startswith("```json"):
                             sf2 = sf2.strip("```json\n").strip("`")
                         parsed_sf2 = json.loads(sf2)
                     except json.JSONDecodeError as e:
-                        logging.warning(f"\n无法解码 SF2 的 JSON。ID: {item_id}, Error: {e}, Output: {sf2}")
+                        logging.warning(f"\nCannot decode SF2 JSON。ID: {item_id}, Error: {e}, Output: {sf2}")
 
-                    # 合并 ID2 和 SF2
                     semantics: List[Dict[str, Any]] = gs.align_and_merge_gpt_slu(
                         id2_frames=parsed_id2,
                         sf2_groups=parsed_sf2,
                     )
 
-                # 解析逻辑保持不变
                 parsed_semantics_list: List[Dict[str, Any]] = []
                 if prompt_mode not in ["gpt-slu"]:
                     if model_output_str:
@@ -672,41 +633,25 @@ def process_file(args: argparse.Namespace):
                                 raise json.JSONDecodeError("Model output is not a list", model_output_str, 0)
 
                         except json.JSONDecodeError as e:
-                            logging.warning(f"\n无法解码 JSON。ID: {item_id}, Error: {e}, Output: {model_output_str}")
+                            logging.warning(f"\nCannot decode model output JSON. ID: {item_id}, Error: {e}, Output: {model_output_str}")
                     else:
-                        logging.warning(f"\nAPI 调用失败或返回空。ID: {item_id}。")
+                        logging.warning(f"\nModel output is empty. ID: {item_id}")
                     result = {"id": item_id, "query": ground_truth_query, "semantics": parsed_semantics_list}
                 else:
                     result = {"id": item_id, "query": ground_truth_query, "semantics": semantics}
                 outfile.write(json.dumps(result, ensure_ascii=False) + '\n')
 
             except Exception as e:
-                logging.error(f"处理行时发生意外错误: {line.strip()}. 错误: {e}", exc_info=True)
+                logging.error(f":\nError processing line: {e}", exc_info=True)
             
-    logging.info(f"\n处理完成。结果已保存到 {output_file}")
+    logging.info(f"\nProcessing complete. Output written to {output_file}")
 
 
 def main():
-    """主函数"""
     parser = setup_arg_parser()
     args = parser.parse_args()
-
-    # --- 修改 ---: 仅在非本地模式下检查 API Key
-    if args.provider != "local":
-        if not args.api_key:
-            args.api_key = os.environ.get("DASHSCOPE_API_KEY")
-        if not args.api_key:
-            logging.error(f"错误: 使用 '{args.provider}' 提供商时，必须提供 API key。")
-            return
-    
-    if args.provider == "local" and OpenAI is None:
-        logging.error("错误: 要使用 'local' 提供商, 请先安装 openai 库: pip install openai")
-        return
 
     process_file(args)
 
 if __name__ == "__main__":
     main()
-
-# /share/nas169/andyfang/mac_slu/audio/audio_test
-# /share/nas169/andyfang/mac_slu/label/test_set.jsonl

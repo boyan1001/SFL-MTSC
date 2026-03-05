@@ -14,10 +14,8 @@ from jiwer import cer
 try:
     from openai import OpenAI
 except ImportError:
-    # 如果用户不使用本地模式，这个库不是必需的
     OpenAI = None 
 
-# 使用 tqdm 显示进度条
 try:
     from tqdm import tqdm
 except ImportError:
@@ -82,15 +80,6 @@ def setup_arg_parser() -> argparse.ArgumentParser:
         "--output-file", type=str, required=False, help="Output JSONL file path"
     )
 
-    # --- 修改 ---: 增加'local'选项，并更新help说明
-    parser.add_argument(
-        "--provider",
-        type=str,
-        default="google",
-        choices=["google", "azure", "local"],
-        help="API提供商: 'google'/'azure' (通过Dashscope), 或 'local' (本地OpenAI兼容接口)"
-    )
-    # --- 新增 ---: 为本地部署模型增加 --api-base 参数
     parser.add_argument(
         "--api-base",
         type=str,
