@@ -17,7 +17,7 @@
 <div align="center">
 <p>
       <sup>1</sup> <a href="mailto:cby931001@gmail.com">cby931001@gmail.com</a> 
-      <sup>2</sup> <a href="mailto:berlin@ntnu.edu.tw">berlin@ntnu.edu.tw</a>,  
+      <a href="mailto:berlin@ntnu.edu.tw">berlin@ntnu.edu.tw</a>,  
 </p>
 </div>
 
