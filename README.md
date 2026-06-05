@@ -1,7 +1,38 @@
 # SFL-MTSC: Leveraging Semantic Frame-Level Multi-Task Self-Consistency for Robust Multi-Intent Spoken Language Understanding
-This repository contains the code and resources for **SFL-MTSC**, a benchmark introduced in our paper "SFL-MTSC: Leveraging Semantic Frame-Level Multi-Task Self-Consistency for Robust Multi-Intent Spoken Language Understanding".
 
-This work is designed to evaluate performance of multi-intent Spoken Language Understading (SLU) systems, and demonstrate how SFL-MTSC work.
+<div align="center">
+      <h2>Authors</h2>
+      <p>
+        <strong>Po-Yen Chen</strong><sup>1</sup>,  
+        <strong>Berlin Chen</strong><sup>1</sup>,  
+      </p>
+</div>
+
+<div align="center">
+    <p>
+        <sup>1</sup> National Taiwan Normal University, Taiwan
+    </p>
+</div>
+
+<div align="center">
+<p>
+      <sup>1</sup> <a href="mailto:cby931001@gmail.com">cby931001@gmail.com</a> 
+      <sup>2</sup> <a href="mailto:berlin@ntnu.edu.tw">berlin@ntnu.edu.tw</a>,  
+</p>
+</div>
+
+<div align="center">
+
+<strong style="font-size: 18px;">Accepted by Interspeech 2026</strong> <br>
+</div>
+
+This repository contains the code and resources for **SFL-MTSC**, a framework introduced in our paper "SFL-MTSC: Leveraging Semantic Frame-Level Multi-Task Self-Consistency for Robust Multi-Intent Spoken Language Understanding". We offer the benchmark to evaluate our framework for three metrics: **intent accuracy**, **slot F1 score** and **overall accuracy**.
+
+## Overview
+SFL-MTSC is a post-inference aggregation framework for robust multi-intent spoken language understanding (SLU).SFL-MTSC is a post-inference aggregation framework for robust multi-intent spoken language understanding (SLU). It addresses decoding inconsistency in prompt-based LLM inference by operating at the semantic frame level: given an input utterance, it samples K reasoning paths at different temperatures, clusters the resulting frames via domain-intent grouping and Hybrid Jaccard slot similarity, filters unreliable clusters by path support, and re-integrates the survivors using a Value-First strategy to produce the final multi-intent prediction.
+
+<p align="center">
+<img width="600" src="./figures/overall.png">
 
 ## 🧱 Project Structure  
 ```
