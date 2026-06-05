@@ -34,7 +34,7 @@ We offer the benchmark to evaluate our framework for three metrics: **intent acc
 SFL-MTSC is a post-inference aggregation framework for robust multi-intent spoken language understanding (SLU).SFL-MTSC is a post-inference aggregation framework for robust multi-intent spoken language understanding (SLU). It addresses decoding inconsistency in prompt-based LLM inference by operating at the semantic frame level: given an input utterance, it samples K reasoning paths at different temperatures, clusters the resulting frames via domain-intent grouping and Hybrid Jaccard slot similarity, filters unreliable clusters by path support, and re-integrates the survivors using a Value-First strategy to produce the final multi-intent prediction.
 
 <p align="center">
-<img width="600" src="./figures/overall.png">
+<img src="./figures/overall.png">
 
 ## 🧱 Project Structure  
 ```
