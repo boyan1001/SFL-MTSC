@@ -23,7 +23,10 @@
 
 <div align="center">
 
-<strong style="font-size: 18px;">Accepted by Interspeech 2026</strong> <br>
+<strong style="font-size: 18px;">Accepted by the 27th Annual Conference</strong> <br>
+    <strong style="font-size: 18px;">of the International Speech Communication Association</strong> <br>
+    <strong style="font-size: 18px;">(Interspeech 2026)</strong>
+</div>
 </div>
 
 This repository contains the code and resources for **SFL-MTSC**, a framework introduced in our paper "SFL-MTSC: Leveraging Semantic Frame-Level Multi-Task Self-Consistency for Robust Multi-Intent Spoken Language Understanding". 
