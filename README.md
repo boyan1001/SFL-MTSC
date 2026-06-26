@@ -198,6 +198,21 @@ python self-consistency \
 ```
 python metrics.py prediction.jsonl gt.jsonl
 ```
+## 📚 Citation
+If our work is useful for your research, please cite the following paper:
+```bibtex
+@article{chen2026sflmtsc,
+      title={SFL-MTSC: Leveraging Semantic Frame-Level Multi-Task Self-Consistency for Robust Multi-Intent Spoken Language Understanding}, 
+      author={Po-Yen Chen and Berlin Chen},
+      year={2026},
+      eprint={2606.25552},
+      journal = {arXiv preprint arXiv:2606.25552},
+}
+```
+
+
+## 🙏 Acknowledgement
+This work was supported in part by Realtek Semiconductor Corporation under Grant Numbers 113KK01103 and 114KK01005. Any findings and implications in the paper do not necessarily reflect those of the sponsors.
 
 ## 🪪 License
 This repository is licensed under the [MIT License](LICENSE) © SMILab
