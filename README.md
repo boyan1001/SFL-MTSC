@@ -201,12 +201,14 @@ python metrics.py prediction.jsonl gt.jsonl
 ## 📚 Citation
 If our work is useful for your research, please cite the following paper:
 ```bibtex
-@article{chen2026sflmtsc,
-      title={SFL-MTSC: Leveraging Semantic Frame-Level Multi-Task Self-Consistency for Robust Multi-Intent Spoken Language Understanding}, 
-      author={Po-Yen Chen and Berlin Chen},
-      year={2026},
-      eprint={2606.25552},
-      journal = {arXiv preprint arXiv:2606.25552},
+@inproceedings{chen26ea_interspeech,
+  title     = {{SFL-MTSC: Leveraging Semantic Frame-Level Multi-Task Self-Consistency for Robust Multi-Intent Spoken Language Understanding}},
+  author    = {Po-Yen Chen and Berlin Chen},
+  year      = {2026},
+  booktitle = {{Interspeech 2026}},
+  pages     = {5824--5829},
+  doi       = {10.21437/Interspeech.2026-3369},
+  issn      = {2958-1796},
 }
 ```
 
